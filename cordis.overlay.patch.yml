@@ -1,0 +1,14 @@
+# 此配置要求先在 DSH 源码根目录应用 patches/dsh-summary-cot-live.patch。
+- id: cot-summary
+  name: '@shenjack/dsh-cot-summary'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+    targetChars: 800
+    maxChars: 1200
+    maxOutputTokens: 256
+    # 仅补丁版 DSH 支持将这类事件标为 ignorable，以便 RDB 只保留最终摘要。
+    streamDeltas: true
+
+- id: client-cot-summary-overlay
+  name: '@shenjack/dsh-client-cot-summary-overlay'

@@ -1,0 +1,13 @@
+- id: cot-summary
+  name: '@shenjack/dsh-cot-summary'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+    targetChars: 800
+    maxChars: 1200
+    maxOutputTokens: 256
+    # 默认兼容未修改的 DSH：不生成 delta，只在一段结束后保存完整摘要。
+    streamDeltas: false
+
+- id: client-cot-summary
+  name: '@shenjack/dsh-client-cot-summary'

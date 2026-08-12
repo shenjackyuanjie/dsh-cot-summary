@@ -1,0 +1,10 @@
+{
+  "name": "dsh-cot-summary-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DSH 的 Summary-CoT 外置插件工作区",
+  "packageManager": "pnpm@10.13.1",
+  "workspaces": [
+    "packages/*"
+  ]
+}
