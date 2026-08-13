@@ -4,12 +4,22 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from './types.ts'
 import { applyCotSummaryProjection, CotSummaryProjectionSchema, emptyCotSummaryProjection } from './projection.ts'
 import type { CotSummaryRef } from './projection-types.ts'
+
+/**
+ * 0811/0812 的持久化恢复白名单尚无外置插件注册接口。必须在模块求值时登记，
+ * 使首次 session load 前已接受 Summary-CoT 的必要持久事件；delta 本身带有
+ * ignorable 标记，无须登记。
+ */
+for (const type of ['cot-summary/settled', 'cot-summary/reset']) {
+  ;(KNOWN_SESSION_EVENT_TYPES as Set<string>).add(type)
+}
 
 /** 插件配置。 */
 export interface Config {
