@@ -1,0 +1,8 @@
+# @shenjack/dsh-client-cot-summary-overlay bundle patch。
+#
+# 在 profile 的 dsh.profile.bundles 中列出本包后，本 patch 在 base 层之后生效，
+# 插入接管 Think 行的浏览器插件行。此包只可与 dsh-summary-cot-live.patch
+# 一起启用（依赖 conversation.chat.reasoning slot）。
+- insert:
+    - id: client-cot-summary-overlay
+      name: '@shenjack/dsh-client-cot-summary-overlay'

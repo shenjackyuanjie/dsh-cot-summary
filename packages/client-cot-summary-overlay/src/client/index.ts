@@ -2,11 +2,10 @@
 
 import { createElement, useEffect, useRef, useState } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ReasoningBlockOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { DisclosureRow, IconThinkOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CotSummaryProjection } from '@shenjack/dsh-cot-summary/projection'
+import type { ReasoningBlockOwnerProps } from './slot-contract.ts'
 
 /** 注入 hooks 使用的最小快照源契约。 */
 interface SnapshotSource<T> {

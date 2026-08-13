@@ -1,13 +1,15 @@
-- id: cot-summary
-  name: '@shenjack/dsh-cot-summary'
-  config:
-    provider: deepseek-official
-    model: deepseek-v4-flash
-    targetChars: 800
-    maxChars: 1200
-    maxOutputTokens: 256
-    # 默认兼容未修改的 DSH：不生成 delta，只在一段结束后保存完整摘要。
-    streamDeltas: false
-
-- id: client-cot-summary
-  name: '@shenjack/dsh-client-cot-summary'
+# @shenjack/dsh-cot-summary bundle patch。
+#
+# 在 profile 的 dsh.profile.bundles 中列出本包后，本 patch 在 base 层之后生效，
+# 插入 Summary-CoT host 服务行。总结模型固定为 deepseek-v4-flash（v4f）。
+# streamDeltas: true 依赖 DSH 已应用 dsh-summary-cot-live.patch（append ignorable）。
+- insert:
+    - id: cot-summary
+      name: '@shenjack/dsh-cot-summary'
+      config:
+        provider: deepseek-official
+        model: deepseek-v4-flash
+        targetChars: 800
+        maxChars: 1200
+        maxOutputTokens: 256
+        streamDeltas: true
