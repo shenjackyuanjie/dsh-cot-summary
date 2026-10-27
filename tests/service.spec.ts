@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
-  createAssistantMessage, LlmAdapter, LlmService, ReasoningEffortId,
+  createAssistantMessage, LlmAdapter, LlmRuntime, ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -29,7 +29,7 @@ async function setup() {
   const ctx = new Context()
   const adapter = new SummaryAdapter()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(LlmService)
+  await ctx.plugin(LlmRuntime)
   ctx.llm.registerAdapter(['summary'], adapter)
   await ctx.plugin(CotSummaryService, {
     provider: 'summary',

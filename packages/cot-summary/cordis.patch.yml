@@ -2,7 +2,9 @@
 #
 # 在 profile 的 dsh.profile.bundles 中列出本包后，本 patch 在 base 层之后生效，
 # 插入 Summary-CoT host 服务行。总结模型固定为 deepseek-v4-flash（v4f）。
-# streamDeltas: true 依赖 DSH 已应用 dsh-summary-cot-live.patch（append ignorable）。
+# 这是默认兼容方案：streamDeltas: false，不依赖任何 DSH 源码修改。
+# 实时 delta 与 Think 行覆盖需要应用 patches/dsh-summary-cot-live.patch，
+# 并改用工作区根目录的 cordis.overlay.patch.yml（streamDeltas: true）。
 - insert:
     - id: cot-summary
       name: '@shenjack/dsh-cot-summary'
@@ -12,4 +14,4 @@
         targetChars: 800
         maxChars: 1200
         maxOutputTokens: 256
-        streamDeltas: true
+        streamDeltas: false

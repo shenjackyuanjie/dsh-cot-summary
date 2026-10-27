@@ -13,9 +13,9 @@ import { applyCotSummaryProjection, CotSummaryProjectionSchema, emptyCotSummaryP
 import type { CotSummaryRef } from './projection-types.ts'
 
 /**
- * 0811/0812 的持久化恢复白名单尚无外置插件注册接口。必须在模块求值时登记，
- * 使首次 session load 前已接受 Summary-CoT 的必要持久事件；delta 本身带有
- * ignorable 标记，无须登记。
+ * 当前 DSH 的持久化恢复白名单（packages/core/session/src/known-event-types.ts）
+ * 由脚本生成，尚无外置插件注册接口。必须在模块求值时登记，使首次 session load
+ * 前已接受 Summary-CoT 的必要持久事件；delta 本身带有 ignorable 标记，无须登记。
  */
 for (const type of ['cot-summary/settled', 'cot-summary/reset']) {
   ;(KNOWN_SESSION_EVENT_TYPES as Set<string>).add(type)
@@ -349,10 +349,12 @@ export class CotSummaryService extends Service {
   }
 
   /**
-   * 将 delta 写成 RDB 可过滤的 ignorable 事件。
+   * 将 delta 写成带 ignorable 标记的事件：持久化后端保存该标记，加载时未识别
+   * 类型凭它跳过而不是拒绝重建。
    *
-   * 默认配置永不调用本方法；可选 DSH 补丁为 append 增加该运行时能力。
-   * 这里刻意不把补丁后的签名写入静态依赖，保证未修改 DSH 也能安装默认方案。
+   * 默认配置永不调用本方法；可选 DSH 补丁为 append 增加该运行时能力
+   * （SessionAppendOptions）。这里刻意不把补丁后的签名写入静态依赖，保证未修改
+   * DSH 也能安装默认方案。
    */
   private appendIgnorableDelta(session: Session, data: import('./types.ts').CotSummaryDelta): void {
     const append = session.append as unknown as (
