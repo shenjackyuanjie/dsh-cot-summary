@@ -1,13 +1,14 @@
 diff --git a/packages/client/ui-conversation/src/client/chat/AssistantMarkdown.tsx b/packages/client/ui-conversation/src/client/chat/AssistantMarkdown.tsx
-index 4365f4c4..ad0c1267 100644
+index bb766da7..c556d638 100644
 --- a/packages/client/ui-conversation/src/client/chat/AssistantMarkdown.tsx
 +++ b/packages/client/ui-conversation/src/client/chat/AssistantMarkdown.tsx
-@@ -9,12 +9,12 @@
+@@ -9,13 +9,13 @@
  // their branch action is enabled only when the node is also the completed
  // turn's transcript tail. Think / tool-head-only nodes stay chrome-free.
  
 -import { memo, useMemo } from 'react'
 +import { Fragment, memo, useMemo } from 'react'
+ import type { ReactNode } from 'react'
  import type { AssistantBlock } from '@deepseek-ai/dsh-client-runtime/client'
  import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
  import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -17,14 +18,14 @@ index 4365f4c4..ad0c1267 100644
  import { messageImageLabels } from '../image-labels.ts'
  import { ReasoningRow } from './ReasoningRow.tsx'
  import css from './AssistantMarkdown.module.css'
-@@ -28,13 +28,18 @@ export interface AssistantMarkdownProps {
+@@ -29,13 +29,18 @@ export interface AssistantMarkdownProps {
    loadImage?: ImageLoader
    /** Resolved prose file mentions for this Assistant's closing turn. */
    mentions?: MarkdownFileMentions | undefined
-+  /** reasoning 展示扩展所需的稳定 step 标识。 */
-+  turn: number
-+  step: number
-+  /** Assistant renderer 的 reasoning 展示链；旧测试或嵌入方缺失时回退内置 Think 行。 */
++  /** Stable step identity of the owning assistant message, for the reasoning display chain. */
++  turn?: number
++  step?: number
++  /** Reasoning display chain; absent (old callers) keeps the built-in Think row. */
 +  renderSlotChain?: AssistantNodeViewProps['renderSlotChain']
    /** The owning view's locale seat, passed down as a plain prop. */
    t: ChatViewSlotProps['t']
@@ -37,42 +38,45 @@ index 4365f4c4..ad0c1267 100644
  }: AssistantMarkdownProps) {
    const imageLoader = loadImage ?? (() => Promise.reject(new Error(t('image.serviceUnavailable'))))
    // Stable per locale revision (t identity changes on switch): a fresh object
-@@ -48,6 +53,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+@@ -49,6 +54,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
      || interrupted === true
      || blocks.some(block => block.kind !== 'tool-call')
    if (!hasVisible) return null
 +  let reasoningIndex = 0
-   return (
-     <div className={css.root} data-streaming={streaming || undefined}>
-       <div className={css.body}>
-@@ -62,7 +68,26 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
-                 fileMentions={mentions}
-               />
-             )
--            case 'reasoning': return <ReasoningRow key={i} text={block.text} running={streaming && i === last} t={t} />
-+            case 'reasoning': {
-+              const running = streaming && i === last
-+              if (renderSlotChain === undefined) {
-+                return <ReasoningRow key={i} text={block.text} running={running} t={t} />
-+              }
-+              const owner: ReasoningBlockOwnerProps = {
-+                turn,
-+                step,
-+                reasoningIndex: reasoningIndex++,
-+                text: block.text,
-+                running,
-+              }
-+              return (
-+                <Fragment key={i}>
-+                  {renderSlotChain('conversation.chat.reasoning', owner, {
-+                    fallback: <ReasoningRow text={block.text} running={running} t={t} />,
-+                  })}
-+                </Fragment>
-+              )
-+            }
-             case 'image': return <ImageGallery key={i} images={[block]} load={imageLoader} align="start" labels={messageImageLabels(t)} />
-             // Grouped into tool rows by ChatView; hasVisible above skips an empty shell.
-             case 'tool-call': return null
+   const rendered: ReactNode[] = []
+   for (let i = 0; i < blocks.length; i++) {
+     const block = blocks[i]
+@@ -65,9 +71,28 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+           />,
+         )
+         break
+-      case 'reasoning':
+-        rendered.push(<ReasoningRow key={i} text={block.text} running={streaming && i === last} t={t} />)
++      case 'reasoning': {
++        const running = streaming && i === last
++        if (renderSlotChain === undefined || turn === undefined || step === undefined) {
++          rendered.push(<ReasoningRow key={i} text={block.text} running={running} t={t} />)
++          break
++        }
++        const owner: ReasoningBlockOwnerProps = {
++          turn,
++          step,
++          reasoningIndex: reasoningIndex++,
++          text: block.text,
++          running,
++        }
++        rendered.push(
++          <Fragment key={i}>
++            {renderSlotChain('conversation.chat.reasoning', owner, {
++              fallback: <ReasoningRow text={block.text} running={running} t={t} />,
++            })}
++          </Fragment>,
++        )
+         break
++      }
+       case 'image': {
+         // Consecutive image blocks share one gallery so several images tile
+         // into rows instead of each opening a one-image group of its own.
 diff --git a/packages/client/ui-conversation/src/client/chat/AssistantNodeView.tsx b/packages/client/ui-conversation/src/client/chat/AssistantNodeView.tsx
 index 72e8a6ae..cfb5ab17 100644
 --- a/packages/client/ui-conversation/src/client/chat/AssistantNodeView.tsx
@@ -103,7 +107,7 @@ index 72e8a6ae..cfb5ab17 100644
      />
    )
 diff --git a/packages/client/ui-conversation/src/client/chat/register-node-renderers.ts b/packages/client/ui-conversation/src/client/chat/register-node-renderers.ts
-index 78aa36d1..f5ec84cd 100644
+index ed311e4b..5078d48d 100644
 --- a/packages/client/ui-conversation/src/client/chat/register-node-renderers.ts
 +++ b/packages/client/ui-conversation/src/client/chat/register-node-renderers.ts
 @@ -19,8 +19,12 @@ export function registerChatNodeRenderers(ctx: Context): void {
@@ -122,27 +126,28 @@ index 78aa36d1..f5ec84cd 100644
      name: 'conversation.chat.node',
      key: 'command',
 diff --git a/packages/client/ui-conversation/src/client/contract/slots.ts b/packages/client/ui-conversation/src/client/contract/slots.ts
-index 602e54d5..34e75344 100644
+index fd3ef388..d560135b 100644
 --- a/packages/client/ui-conversation/src/client/contract/slots.ts
 +++ b/packages/client/ui-conversation/src/client/contract/slots.ts
-@@ -61,6 +61,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
-       hookContext: string
-       inject: ChatNodeTurnDataInjected
-     }
-+    /** 一个 Assistant reasoning 区块；展示插件可接管，内置 Think 行保留为 fallback。 */
-+    'conversation.chat.reasoning': {
-+      kind: 'chain'
-+      scope: 'session'
-+      owner: ReasoningBlockOwnerProps
-+    }
+@@ -83,6 +83,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+      * only to return null; an all-declined chain renders nothing.
+      */
+     'conversation.chat.turnTail': { kind: 'chain'; scope: 'session'; owner: TurnTailOwnerProps }
++    /**
++     * One Assistant reasoning block inside an assistant-step node. The
++     * assistant renderer keeps the built-in Think row as the chain fallback;
++     * a display plugin may take over the block's presentation (e.g. a live
++     * Summary-CoT row).
++     */
++    'conversation.chat.reasoning': { kind: 'chain'; scope: 'session'; owner: ReasoningBlockOwnerProps }
      /**
-      * The chat view's per-command row hole: keyed dispatch on the command
-      * name (`command/run.name`; a run-less cross-window node has none and
-@@ -283,6 +289,19 @@ export interface ChatNodeOwnerProps {
+      * Action strip attached to one finalized assistant message, rendered
+      * inside that message's IconActions row. The chat entry owns the render
+@@ -311,6 +318,19 @@ export interface ChatNodeOwnerProps {
  export type ChatNodeViewProps<Kind extends ChatNodeKind = ChatNodeKind> =
    PropsRuntime<'conversation.chat.node', Kind> & PropsLocale<'conversation'>
  
-+/** 一个已渲染 reasoning 区块的稳定标识与当前原始内容；序号不暴露 adapter 私有索引。 */
++/** Stable identity and raw content of one rendered reasoning block; the index is not an adapter-private stream index. */
 +export interface ReasoningBlockOwnerProps {
 +  readonly turn: number
 +  readonly step: number
@@ -151,7 +156,7 @@ index 602e54d5..34e75344 100644
 +  readonly running: boolean
 +}
 +
-+/** Assistant renderer 声明 reasoning 展示链后获得的 props。 */
++/** Assistant renderer props: the keyed assistant-step share plus the reasoning display chain. */
 +export type AssistantNodeViewProps =
 +  ChatNodeViewProps<'assistant-step'> & PropsRenderSlots<'conversation.chat.reasoning'>
 +
@@ -159,31 +164,118 @@ index 602e54d5..34e75344 100644
  export interface DetailsToolOwnerProps {
    /** Frozen selected call slice. */
 diff --git a/packages/client/ui-conversation/src/client/index.ts b/packages/client/ui-conversation/src/client/index.ts
-index 5f120157..d0d334e1 100644
+index 0574aa83..a713eaf7 100644
 --- a/packages/client/ui-conversation/src/client/index.ts
 +++ b/packages/client/ui-conversation/src/client/index.ts
-@@ -27,11 +27,11 @@ export type {
-   RetryChatData, ToolChatData, TurnTailChatData,
- } from './contract/chat-nodes.ts'
- export type {
--  ChatFileMentions, ChatNodeOwnerProps, ChatNodeViewProps,
-+  AssistantNodeViewProps, ChatFileMentions, ChatNodeOwnerProps, ChatNodeViewProps,
-   ChatStore, ChatViewInjected, ChatViewSlotProps, CommandRowOwnerProps, CommandRowProps, ComposerBarInjected,
+@@ -33,7 +33,7 @@ export type {
    ComposerAttachment, ComposerChainProps, ConversationInjected,
    ConversationSessionHeaderInjected, ConversationSessionInjected, ConversationSlotProps, ConvViewOwnerProps,
    ConvViewProps, DetailsInjected, DetailsSlotProps, DetailsToolOwnerProps, EmptyWorkspaceOwnerProps,
 -  TurnTailOwnerProps, UseChatNodeTurnData,
-+  ReasoningBlockOwnerProps, TurnTailOwnerProps, UseChatNodeTurnData,
++  AssistantNodeViewProps, ReasoningBlockOwnerProps, TurnTailOwnerProps, UseChatNodeTurnData,
  } from './contract/slots.ts'
  // Export discipline: packages/client/AGENTS.md.
+ 
+diff --git a/packages/client/ui-conversation/tests/assistant-reasoning-chain.client.spec.tsx b/packages/client/ui-conversation/tests/assistant-reasoning-chain.client.spec.tsx
+new file mode 100644
+index 00000000..05720c31
+--- /dev/null
++++ b/packages/client/ui-conversation/tests/assistant-reasoning-chain.client.spec.tsx
+@@ -0,0 +1,66 @@
++// @vitest-environment jsdom
++import { describe, expect, it } from 'vitest'
++import { render } from '@testing-library/react'
++import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
++import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
++import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
++import type { ReasoningBlockOwnerProps } from '../src/client/contract/slots.ts'
++import { zh } from '../src/client/locales.ts'
++
++const t = makeTranslate(zh, commonZh)
++
++/** The chain share without the optional-`undefined` wrapper (exactOptionalPropertyTypes). */
++type ReasoningChain = NonNullable<AssistantMarkdownProps['renderSlotChain']>
++
++describe('AssistantMarkdown reasoning display chain', () => {
++  it('routes every reasoning block through the chain with positional indices when one is supplied', () => {
++    const owners: ReasoningBlockOwnerProps[] = []
++    // The generic renderSlotChain signature rejects non-generic arrows, so the
++    // stub asserts the share type like the other harnesses in this package.
++    const chain = ((_key: string, owner: ReasoningBlockOwnerProps) => {
++      owners.push(owner)
++      return <div data-chain>{`chain:${owner.reasoningIndex}`}</div>
++    }) as unknown as ReasoningChain
++    const view = render(
++      <AssistantMarkdown
++        t={t}
++        turn={2}
++        step={1}
++        blocks={[
++          { kind: 'reasoning', text: 'first thoughts' },
++          { kind: 'text', text: 'answer body' },
++          { kind: 'reasoning', text: 'second thoughts' },
++        ]}
++        streaming
++        renderSlotChain={chain}
++      />,
++    )
++    expect(owners).toHaveLength(2)
++    expect(owners[0]).toMatchObject({
++      turn: 2, step: 1, reasoningIndex: 0, text: 'first thoughts', running: false,
++    })
++    expect(owners[1]).toMatchObject({
++      turn: 2, step: 1, reasoningIndex: 1, text: 'second thoughts', running: true,
++    })
++    expect(view.getByText('chain:0')).toBeTruthy()
++    expect(view.getByText('chain:1')).toBeTruthy()
++    expect(view.queryByText('Think')).toBeNull()
++  })
++
++  it('falls back to the built-in Think row when the chain declines', () => {
++    const declining = ((_key: string, _owner: object, opts?: { fallback?: React.ReactNode }) =>
++      opts?.fallback ?? null) as unknown as ReasoningChain
++    const view = render(
++      <AssistantMarkdown
++        t={t}
++        turn={1}
++        step={1}
++        blocks={[{ kind: 'reasoning', text: 'declined thoughts' }]}
++        streaming={false}
++        renderSlotChain={declining}
++      />,
++    )
++    expect(view.getByRole('button')).toBeTruthy()
++    expect(view.getByText('declined thoughts')).toBeTruthy()
++  })
++})
+diff --git a/packages/client/ui-conversation/tests/chat-view.client.spec.tsx b/packages/client/ui-conversation/tests/chat-view.client.spec.tsx
+index 360b589b..6a573929 100644
+--- a/packages/client/ui-conversation/tests/chat-view.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/chat-view.client.spec.tsx
+@@ -203,7 +203,14 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
+       case 'context':
+         return <ContextMessageNodeView {...nodeProps<'context'>()} />
+       case 'assistant-step':
+-        return <AssistantNodeView {...nodeProps<'assistant-step'>()} />
++        return (
++          <AssistantNodeView
++            {...nodeProps<'assistant-step'>()}
++            renderSlot={renderTurnTailSlot}
++            renderSlotChain={renderTurnTail}
++            SessionProvider={props.SessionProvider}
++          />
++        )
+       case 'command':
+         return (
+           <CommandNodeView
 diff --git a/packages/core/session/src/index.ts b/packages/core/session/src/index.ts
-index 16f84fc6..daea4903 100644
+index d2e72b46..ef3815b2 100644
 --- a/packages/core/session/src/index.ts
 +++ b/packages/core/session/src/index.ts
 @@ -14,7 +14,7 @@ import type { Scoped } from '@deepseek-ai/dsh-scope'
  import type { Message } from '@deepseek-ai/dsh-llm'
  import { SESSION_FORMAT_VERSION, SessionId } from './types.ts'
- import type { TypeRTLookup } from '@deepseek-ai/dsh-type-meta'
+ import type { TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 -import type { CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SurfaceIntent, SurfaceEventType } from './types.ts'
 +import type { CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionAppendOptions, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SurfaceIntent, SurfaceEventType } from './types.ts'
  import { snapshotJsonValue } from './json.ts'
@@ -209,7 +301,7 @@ index 16f84fc6..daea4903 100644
      }
      const dataSnapshot = snapshotJsonValue(data)
      if (dataSnapshot === undefined) {
-@@ -629,6 +632,6 @@ export class Session {
+@@ -629,7 +632,7 @@ export class Session {
        seq: this.log.length,
        time: Date.now(),
        data: dataSnapshot,
@@ -217,17 +309,24 @@ index 16f84fc6..daea4903 100644
 +      ...(surfaceMetadataSnapshot as { surfaceOp?: unknown; sourceEventSeqs?: unknown; ignorable?: true }),
      } as unknown as SessionEvent<T>)
      this.surfaceManager.validateNext(event as SessionEvent)
+ 
 diff --git a/packages/core/session/src/types.ts b/packages/core/session/src/types.ts
-index 73c28856..8cc7bb09 100644
+index 17aacd1d..a14ac8f9 100644
 --- a/packages/core/session/src/types.ts
 +++ b/packages/core/session/src/types.ts
-@@ -388,6 +388,14 @@ export interface SurfaceIntent {
+@@ -388,6 +388,20 @@ export interface SurfaceIntent {
    sourceEventSeqs?: number[]
  }
  
 +/**
-+ * 会话事件写入选项。`ignorable: true` 仅适用于丢失后不影响会话重建的
-+ * 纯展示或实时事件；持久化后端可安全跳过这类记录。
++ * Session event write options accepted by {@link Session.append} alongside the
++ * surface intent (surface events) or alone (log-only events).
++ *
++ * `ignorable: true` marks the event purely informational: a reader meeting an
++ * unrecognized `type` skips it instead of refusing the log (see
++ * {@link SessionEvent.ignorable}), so only records whose loss cannot affect
++ * reconstruction may set it. Persistence backends persist the marker and may
++ * use it to drop the record.
 + */
 +export interface SessionAppendOptions {
 +  ignorable?: true
@@ -237,20 +336,20 @@ index 73c28856..8cc7bb09 100644
   * One immutable entry in the session log.
   *
 diff --git a/packages/core/session/tests/session.spec.ts b/packages/core/session/tests/session.spec.ts
-index e8fa78ab..fbf3bf53 100644
+index 47453ea6..300f4c5f 100644
 --- a/packages/core/session/tests/session.spec.ts
 +++ b/packages/core/session/tests/session.spec.ts
-@@ -1092,6 +1092,13 @@ describe('Session', () => {
- 
- 
- describe('SessionStore', () => {
-+  it('允许 append 写入可被持久化后端过滤的 ignorable 事件', async () => {
+@@ -1088,6 +1088,13 @@ describe('Session', () => {
+     ])
+     expect(marked.events[0]?.ignorable).toBe(true)
+   })
++
++  it('allows append to mark a log-only event ignorable for persistence backends', () => {
 +    const session = Session.create(SessionId('append-ignorable'))
 +    const event = session.append('turn/start', { turn: 1 }, { ignorable: true })
 +    expect(event.ignorable).toBe(true)
 +    expect(session.events[0]?.ignorable).toBe(true)
 +  })
-+
-   it('creates sessions, emits session/created and session/event', async () => {
-     const ctx = new Context()
-     await ctx.plugin(SessionStore)
+ })
+ 
+ 
